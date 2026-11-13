@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Trophy, Flag, Plus, Clock, CheckCircle, AlertTriangle,
   Copy, Check, Upload, Shield, User, Sliders, Eye, EyeOff,
-  Play, Share2, Award, Zap, ChevronRight, Lock, Unlock, Layers
+  Play, Share2, Award, Zap, ChevronRight, Lock, Unlock, Layers, Car
 } from 'lucide-react';
 
 const TRACK_PIECES = {
@@ -46,7 +46,7 @@ function TrackPreviewSVG({ code }) {
   if (pieces.length === 0) {
     return (
       <div className="flex items-center justify-center h-44 bg-slate-100 rounded-xl border border-dashed border-slate-300 text-slate-400 text-sm">
-        Introduce un código válido (ej. 3db3da) para previsualizar el trazado
+        Introduce un código válido para previsualizar el trazado
       </div>
     );
   }
@@ -96,7 +96,7 @@ function TrackPreviewSVG({ code }) {
       <div className="flex justify-between items-center mb-2 text-xs">
         <span className="text-slate-300 font-medium">{pieces.length} piezas totales</span>
         <span className={`px-2 py-0.5 rounded-full font-semibold ${isClosed ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
-          {isClosed ? 'Circuito cerrado OK' : 'Trazado abierto / revisar cierre'}
+          {isClosed ? 'Circuito cerrado OK' : 'Trazado abierto'}
         </span>
       </div>
       <svg viewBox={`${minX} ${minY} ${width} ${height}`} className="w-full h-44 overflow-visible">
@@ -150,8 +150,14 @@ function buildSetupCode(s) {
 
 export default function App() {
   const [role, setRole] = useState('admin');
-  const [activeTab, setActiveTab] = useState('challenges');
+  const [activeTab, setActiveTab] = useState('challenges'); // 'challenges' | 'builder' | 'pilots'
   const [copiedId, setCopiedId] = useState(null);
+
+  const [pilots, setPilots] = useState([
+    { id: 'p-1', name: 'Roberto Del Val', number: '71', car: 'Carrera Hybrid BMW M4 GT3', livery: 'Naranja / Negro' },
+    { id: 'p-2', name: 'Hermano Del Val', number: '09', car: 'Carrera Hybrid Porsche 911 GT3', livery: 'Rojo / Blanco' },
+    { id: 'p-3', name: 'Carlos M.', number: '81', car: 'Carrera Hybrid Audi R8 LMS', livery: 'Plata / Azul' },
+  ]);
 
   const [events, setEvents] = useState([
     {
@@ -164,7 +170,7 @@ export default function App() {
       setupLabel: 'Simulación Plus',
       laps: 10,
       results: [
-        { pilot: 'Carlos M.', time: '01:14.320', ms: 74320, valid: true, submittedAt: 'Hace 18 min' },
+        { pilot: 'Carlos M.', car: 'Carrera Hybrid Audi R8 LMS', time: '01:14.320', ms: 74320, valid: true, submittedAt: 'Hace 18 min' },
       ],
     },
     {
@@ -177,8 +183,8 @@ export default function App() {
       setupLabel: 'Modo Simulación',
       laps: 15,
       results: [
-        { pilot: 'Roberto Del Val', time: '00:48.910', ms: 48910, valid: true, submittedAt: 'Ayer' },
-        { pilot: 'Hermano Del Val', time: '00:49.105', ms: 49105, valid: true, submittedAt: 'Ayer' },
+        { pilot: 'Roberto Del Val', car: 'Carrera Hybrid BMW M4 GT3', time: '00:48.910', ms: 48910, valid: true, submittedAt: 'Ayer' },
+        { pilot: 'Hermano Del Val', car: 'Carrera Hybrid Porsche 911 GT3', time: '00:49.105', ms: 49105, valid: true, submittedAt: 'Ayer' },
       ],
     },
   ]);
@@ -192,11 +198,15 @@ export default function App() {
   }, []);
 
   const [uploadModalEvent, setUploadModalEvent] = useState(null);
-  const [pilotName, setPilotName] = useState('Roberto Del Val');
+  const [selectedPilotId, setSelectedPilotId] = useState(pilots[0]?.id || '');
   const [mins, setMins] = useState('01');
   const [secs, setSecs] = useState('12');
   const [millis, setMillis] = useState('450');
   const [ocrScanning, setOcrScanning] = useState(false);
+
+  const [newPilotName, setNewPilotName] = useState('');
+  const [newPilotNumber, setNewPilotNumber] = useState('');
+  const [newPilotCar, setNewPilotCar] = useState('Carrera Hybrid GT3');
 
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('official');
@@ -211,19 +221,13 @@ export default function App() {
   };
 
   const handleStartSurprise = (eventId) => {
-    setSurpriseStartTimes((prev) => ({
-      ...prev,
-      [eventId]: Date.now(),
-    }));
+    setSurpriseStartTimes((prev) => ({ ...prev, [eventId]: Date.now() }));
   };
 
   const getSurpriseRemaining = (eventId) => {
     const started = surpriseStartTimes[eventId];
     if (!started) return null;
-    const limitMs = 90 * 60 * 1000;
-    const elapsed = now - started;
-    const remaining = limitMs - elapsed;
-    return remaining;
+    return 90 * 60 * 1000 - (now - started);
   };
 
   const formatCountdown = (ms) => {
@@ -249,6 +253,7 @@ export default function App() {
     e.preventDefault();
     if (!uploadModalEvent) return;
 
+    const currentPilot = pilots.find((p) => p.id === selectedPilotId) || pilots[0];
     const totalMs =
       parseInt(mins || '0', 10) * 60000 +
       parseInt(secs || '0', 10) * 1000 +
@@ -258,9 +263,7 @@ export default function App() {
     let isValid = true;
     if (uploadModalEvent.category === 'surprise') {
       const rem = getSurpriseRemaining(uploadModalEvent.id);
-      if (rem === null || rem <= 0) {
-        isValid = false;
-      }
+      if (rem === null || rem <= 0) isValid = false;
     }
 
     setEvents((prev) =>
@@ -269,7 +272,8 @@ export default function App() {
         const updated = [
           ...ev.results,
           {
-            pilot: pilotName || 'Piloto Invitado',
+            pilot: currentPilot.name,
+            car: currentPilot.car,
             time: formattedTime,
             ms: totalMs,
             valid: isValid,
@@ -283,16 +287,30 @@ export default function App() {
     setUploadModalEvent(null);
   };
 
+  const handleRegisterPilot = (e) => {
+    e.preventDefault();
+    if (!newPilotName.trim()) return;
+    const newP = {
+      id: `p-${Date.now()}`,
+      name: newPilotName.trim(),
+      number: newPilotNumber.trim() || '00',
+      car: newPilotCar,
+      livery: 'Personalizado Club',
+    };
+    setPilots([...pilots, newP]);
+    setNewPilotName('');
+    setNewPilotNumber('');
+  };
+
   const handleCreateTrack = (e) => {
     e.preventDefault();
     if (!newTitle.trim() || !newTrackCode.trim()) return;
 
-    const effectiveCategory = role === 'pilot' ? 'community' : newCategory;
     const newEv = {
       id: `ev-${Date.now()}`,
       title: newTitle.trim(),
-      category: effectiveCategory,
-      author: role === 'admin' ? 'Organización Drift Frutando' : pilotName,
+      category: role === 'pilot' ? 'community' : newCategory,
+      author: role === 'admin' ? 'Organización Drift Frutando' : pilots[0]?.name || 'Piloto',
       trackCode: newTrackCode.trim(),
       setupCode: buildSetupCode(setup),
       setupLabel: setup.label || 'Personalizado',
@@ -334,9 +352,7 @@ export default function App() {
             <button
               onClick={() => setActiveTab('challenges')}
               className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition ${
-                activeTab === 'challenges'
-                  ? 'bg-white text-orange-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'challenges' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Desafíos y Circuitos
@@ -344,41 +360,42 @@ export default function App() {
             <button
               onClick={() => setActiveTab('builder')}
               className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
-                activeTab === 'builder'
-                  ? 'bg-white text-orange-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'builder' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Plus className="w-4 h-4" />
-              {role === 'admin' ? 'Crear Prueba Oficial' : 'Reto Libre'}
+              Crear Pista
+            </button>
+            <button
+              onClick={() => setActiveTab('pilots')}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+                activeTab === 'pilots' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Car className="w-4 h-4" />
+              Pilotos y Garaje ({pilots.length})
             </button>
           </nav>
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
-              <button
-                onClick={() => setRole('admin')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition ${
-                  role === 'admin'
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Shield className="w-3.5 h-3.5 text-orange-400" />
-                Organización
-              </button>
-              <button
-                onClick={() => setRole('pilot')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition ${
-                  role === 'pilot'
-                    ? 'bg-orange-600 text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" />
-                Piloto
-              </button>
-            </div>
+          <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+            <button
+              onClick={() => setRole('admin')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition ${
+                role === 'admin' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-orange-400" />
+              Organización
+            </button>
+            <button
+              onClick={() => setRole('pilot')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition ${
+                role === 'pilot' ? 'bg-orange-600 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              Piloto
+            </button>
           </div>
         </div>
       </header>
@@ -389,25 +406,14 @@ export default function App() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">Pistas Activas del Club</h1>
-                <p className="text-sm text-slate-500">
-                  Copia el código de pista para montarla, ajusta tu coche y sube tu captura de tiempo.
-                </p>
+                <p className="text-sm text-slate-500">Selecciona el evento, monta tu circuito y registra tu crono oficial.</p>
               </div>
               <button
                 onClick={() => handleCopy(window.location.href, 'share-club')}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-orange-300 rounded-xl text-sm font-semibold text-slate-700 shadow-sm transition"
               >
-                {copiedId === 'share-club' ? (
-                  <>
-                    <Check className="w-4 h-4 text-emerald-600" />
-                    <span className="text-emerald-700">Enlace copiado</span>
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="w-4 h-4 text-orange-600" />
-                    <span>Compartir Web del Club</span>
-                  </>
-                )}
+                {copiedId === 'share-club' ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-orange-600" />}
+                <span>Compartir Web del Club</span>
               </button>
             </div>
 
@@ -419,30 +425,13 @@ export default function App() {
                 const isExpired = isSurprise && remainingMs !== null && remainingMs <= 0;
 
                 return (
-                  <div
-                    key={ev.id}
-                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col ${
-                      isSurprise ? 'border-orange-300 ring-1 ring-orange-200' : 'border-slate-200'
-                    }`}
-                  >
+                  <div key={ev.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col ${isSurprise ? 'border-orange-300 ring-1 ring-orange-200' : 'border-slate-200'}`}>
                     <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 mb-1.5">
-                          {ev.category === 'surprise' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
-                              <Zap className="w-3.5 h-3.5" /> PRUEBA SORPRESA (90 MIN)
-                            </span>
-                          )}
-                          {ev.category === 'official' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-900 text-white">
-                              <Trophy className="w-3.5 h-3.5 text-amber-400" /> OFICIAL CAMPEONATO
-                            </span>
-                          )}
-                          {ev.category === 'community' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                              RETO PILOTO
-                            </span>
-                          )}
+                          {isSurprise && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">PRUEBA SORPRESA (90 MIN)</span>}
+                          {ev.category === 'official' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-900 text-white">OFICIAL CAMPEONATO</span>}
+                          {ev.category === 'community' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">RETO PILOTO</span>}
                           <span className="text-xs text-slate-400">• {ev.laps} vueltas</span>
                         </div>
                         <h2 className="text-lg font-bold text-slate-900">{ev.title}</h2>
@@ -450,13 +439,7 @@ export default function App() {
                       </div>
 
                       {isSurprise && isUnlocked && (
-                        <div
-                          className={`px-3 py-1.5 rounded-xl text-right font-mono text-xs font-bold ${
-                            isExpired
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-amber-100 text-amber-900 animate-pulse'
-                          }`}
-                        >
+                        <div className={`px-3 py-1.5 rounded-xl text-right font-mono text-xs font-bold ${isExpired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-900 animate-pulse'}`}>
                           <div className="text-[10px] uppercase font-sans opacity-75">Tiempo restante</div>
                           {formatCountdown(remainingMs)}
                         </div>
@@ -467,63 +450,36 @@ export default function App() {
                       {!isUnlocked ? (
                         <div className="bg-slate-900 text-white rounded-xl p-6 text-center space-y-3">
                           <Lock className="w-8 h-8 text-orange-400 mx-auto" />
-                          <h3 className="font-bold text-base">Trazado y Setup Confidenciales</h3>
+                          <h3 className="font-bold text-base">Trazado Confidencial</h3>
                           <p className="text-xs text-slate-300 max-w-sm mx-auto">
-                            Al pulsar en desbloquear se revelará el código de pista y los ajustes del coche. Desde ese instante tendrás exactamente <strong>1 hora y 30 minutos</strong> para subir tu captura.
+                            Al iniciar el reto se revelará el código y el cronómetro de 90 minutos echará a andar.
                           </p>
                           <button
                             onClick={() => handleStartSurprise(ev.id)}
                             className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm rounded-xl transition shadow-md"
                           >
-                            <Unlock className="w-4 h-4" />
-                            Aceptar Reto y Iniciar Cronómetro
+                            <Unlock className="w-4 h-4" /> Desbloquear Reto
                           </button>
                         </div>
                       ) : (
                         <>
                           <TrackPreviewSVG code={ev.trackCode} />
-
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                              <span className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                                Código de Pista (Editor)
-                              </span>
+                              <span className="text-[11px] font-bold uppercase text-slate-400 block mb-1">Código de Pista</span>
                               <div className="flex items-center justify-between gap-2">
-                                <code className="text-xs font-mono font-bold text-slate-800 truncate">
-                                  {ev.trackCode}
-                                </code>
-                                <button
-                                  onClick={() => handleCopy(ev.trackCode, `trk-${ev.id}`)}
-                                  className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600"
-                                  title="Copiar código de pista"
-                                >
-                                  {copiedId === `trk-${ev.id}` ? (
-                                    <Check className="w-4 h-4 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-4 h-4" />
-                                  )}
+                                <code className="text-xs font-mono font-bold text-slate-800 truncate">{ev.trackCode}</code>
+                                <button onClick={() => handleCopy(ev.trackCode, `trk-${ev.id}`)} className="p-1 hover:bg-slate-200 rounded-lg text-slate-600">
+                                  {copiedId === `trk-${ev.id}` ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                                 </button>
                               </div>
                             </div>
-
                             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                              <span className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                                Setup Coche ({ev.setupLabel})
-                              </span>
+                              <span className="text-[11px] font-bold uppercase text-slate-400 block mb-1">Setup Coche ({ev.setupLabel})</span>
                               <div className="flex items-center justify-between gap-2">
-                                <code className="text-xs font-mono font-bold text-orange-700">
-                                  {ev.setupCode}
-                                </code>
-                                <button
-                                  onClick={() => handleCopy(ev.setupCode, `stp-${ev.id}`)}
-                                  className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600"
-                                  title="Copiar código setup"
-                                >
-                                  {copiedId === `stp-${ev.id}` ? (
-                                    <Check className="w-4 h-4 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-4 h-4" />
-                                  )}
+                                <code className="text-xs font-mono font-bold text-orange-700">{ev.setupCode}</code>
+                                <button onClick={() => handleCopy(ev.setupCode, `stp-${ev.id}`)} className="p-1 hover:bg-slate-200 rounded-lg text-slate-600">
+                                  {copiedId === `stp-${ev.id}` ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                                 </button>
                               </div>
                             </div>
@@ -533,48 +489,34 @@ export default function App() {
 
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold uppercase text-slate-500">
-                            Clasificación ({ev.results.length})
-                          </span>
+                          <span className="text-xs font-bold uppercase text-slate-500">Clasificación ({ev.results.length})</span>
                           {isUnlocked && (
                             <button
                               onClick={() => setUploadModalEvent(ev)}
                               disabled={isExpired}
-                              className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition ${
-                                isExpired
-                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                  : 'bg-orange-600 hover:bg-orange-500 text-white shadow-sm'
-                              }`}
+                              className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition ${isExpired ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-500 text-white shadow-sm'}`}
                             >
-                              <Upload className="w-3.5 h-3.5" />
-                              {isExpired ? 'Plazo cerrado' : 'Subir Tiempo'}
+                              <Upload className="w-3.5 h-3.5" /> {isExpired ? 'Plazo cerrado' : 'Subir Mi Crono'}
                             </button>
                           )}
                         </div>
 
                         {ev.results.length === 0 ? (
-                          <p className="text-xs text-slate-400 italic py-2">
-                            Aún no hay tiempos registrados en este circuito.
-                          </p>
+                          <p className="text-xs text-slate-400 italic py-2">Sin tiempos registrados todavía.</p>
                         ) : (
                           <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
                             {ev.results.map((r, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between px-3 py-2 text-xs bg-white"
-                              >
+                              <div key={idx} className="flex items-center justify-between px-3 py-2 text-xs bg-white">
                                 <div className="flex items-center gap-2">
                                   <span className="font-bold text-slate-400 w-4">#{idx + 1}</span>
-                                  <span className="font-semibold text-slate-800">{r.pilot}</span>
-                                  {!r.valid && (
-                                    <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-bold">
-                                      FUERA DE PLAZO
-                                    </span>
-                                  )}
+                                  <div>
+                                    <span className="font-semibold text-slate-800 block">{r.pilot}</span>
+                                    <span className="text-[10px] text-slate-400">{r.car}</span>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-slate-400">{r.submittedAt}</span>
-                                  <span className="font-mono font-bold text-slate-900">{r.time}</span>
+                                <div className="text-right">
+                                  <span className="font-mono font-bold text-slate-900 block">{r.time}</span>
+                                  <span className="text-[10px] text-slate-400">{r.submittedAt}</span>
                                 </div>
                               </div>
                             ))}
@@ -589,20 +531,82 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'pilots' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Garaje y Registro Oficial de Pilotos</h2>
+                <p className="text-xs text-slate-500">Da de alta a los miembros de Drift Frutando Madrid y sus vehículos configurados.</p>
+              </div>
+
+              <form onSubmit={handleRegisterPilot} className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Nombre del Piloto</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej. Roberto Del Val"
+                    value={newPilotName}
+                    onChange={(e) => setNewPilotName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Dorsal / Número</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. 71"
+                    value={newPilotNumber}
+                    onChange={(e) => setNewPilotNumber(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Modelo de Coche</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej. Carrera Hybrid BMW M4"
+                    value={newPilotCar}
+                    onChange={(e) => setNewPilotCar(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                  />
+                </div>
+                <div className="sm:col-span-3 flex justify-end">
+                  <button type="submit" className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-md">
+                    Guardar Piloto en el Club
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {pilots.map((p) => (
+                <div key={p.id} className="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-orange-100 text-orange-700 font-black flex items-center justify-center text-sm">
+                      #{p.number}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">{p.name}</h4>
+                      <p className="text-xs text-slate-500">{p.car}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-1 bg-slate-100 text-slate-600 rounded-md">Piloto Oficial</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'builder' && (
           <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">
-                  {role === 'admin'
-                    ? 'Publicar Nueva Prueba Oficial / Sorpresa'
-                    : 'Crear Reto Libre de Piloto'}
+                  {role === 'admin' ? 'Publicar Nueva Prueba Oficial / Sorpresa' : 'Crear Reto Libre de Piloto'}
                 </h2>
-                <p className="text-xs text-slate-500">
-                  {role === 'admin'
-                    ? 'Como Organización puedes publicar circuitos del campeonato o pruebas sorpresa con límite de 90 minutos.'
-                    : 'Como Piloto puedes compartir tus propios trazados para retar al resto del club.'}
-                </p>
+                <p className="text-xs text-slate-500">Monta el circuito por piezas y configura las reglas estrictas de carrera.</p>
               </div>
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
                 Rol: {role === 'admin' ? 'Organización' : 'Piloto'}
@@ -612,9 +616,7 @@ export default function App() {
             <form onSubmit={handleCreateTrack} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
-                    Nombre del Circuito / Evento
-                  </label>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Nombre del Circuito / Evento</label>
                   <input
                     type="text"
                     required
@@ -626,9 +628,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
-                    Tipo de Evento
-                  </label>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Tipo de Evento</label>
                   {role === 'admin' ? (
                     <select
                       value={newCategory}
@@ -653,7 +653,7 @@ export default function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold uppercase text-slate-600">
-                    Código de Pista (Pega un código o pulsa las piezas para añadirlas)
+                    Código de Pista (Pulsa las piezas para añadirlas)
                   </label>
                   <button
                     type="button"
@@ -706,6 +706,7 @@ export default function App() {
                 <TrackPreviewSVG code={newTrackCode} />
               </div>
 
+              {/* Ajustes avanzados del coche con todos los desplegables */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold uppercase text-slate-700 flex items-center gap-1.5">
@@ -803,9 +804,7 @@ export default function App() {
                     >
                       <option value="0">Desactivado</option>
                       {[...Array(20)].map((_, i) => (
-                        <option key={i + 1} value={String(i + 1)}>
-                          x{i + 1}
-                        </option>
+                        <option key={i + 1} value={String(i + 1)}>x{i + 1}</option>
                       ))}
                     </select>
                   </div>
@@ -819,9 +818,7 @@ export default function App() {
                     >
                       <option value="0">Desactivado</option>
                       {[...Array(20)].map((_, i) => (
-                        <option key={i + 1} value={String(i + 1)}>
-                          x{i + 1}
-                        </option>
+                        <option key={i + 1} value={String(i + 1)}>x{i + 1}</option>
                       ))}
                     </select>
                   </div>
@@ -871,28 +868,28 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Registrar Tiempo</h3>
+              <h3 className="text-lg font-bold text-slate-900">Registrar Crono Oficial</h3>
               <p className="text-xs text-slate-500">{uploadModalEvent.title}</p>
             </div>
 
             <form onSubmit={handleSubmitResult} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
-                  Nombre del Piloto
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={pilotName}
-                  onChange={(e) => setPilotName(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
-                />
+                <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Seleccionar Piloto y Coche</label>
+                <select
+                  value={selectedPilotId}
+                  onChange={(e) => setSelectedPilotId(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm bg-white font-medium"
+                >
+                  {pilots.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      #{p.number} — {p.name} ({p.car})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 text-center space-y-2">
-                <p className="text-xs text-slate-600">
-                  Sube la captura de pantalla de la app Carrera Hybrid para lectura automática:
-                </p>
+                <p className="text-xs text-slate-600">Simulador de lectura automática por OCR de captura:</p>
                 <label className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg cursor-pointer hover:bg-slate-800">
                   <Upload className="w-3.5 h-3.5" />
                   {ocrScanning ? 'Leyendo captura...' : 'Seleccionar Captura'}
@@ -903,53 +900,21 @@ export default function App() {
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 mb-1">Minutos</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={mins}
-                    onChange={(e) => setMins(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-center font-bold"
-                  />
+                  <input type="number" min="0" max="59" value={mins} onChange={(e) => setMins(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-center font-bold" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 mb-1">Segundos</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={secs}
-                    onChange={(e) => setSecs(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-center font-bold"
-                  />
+                  <input type="number" min="0" max="59" value={secs} onChange={(e) => setSecs(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-center font-bold" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 mb-1">Milésimas</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="999"
-                    value={millis}
-                    onChange={(e) => setMillis(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-center font-bold"
-                  />
+                  <input type="number" min="0" max="999" value={millis} onChange={(e) => setMillis(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-center font-bold" />
                 </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setUploadModalEvent(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold"
-                >
-                  Confirmar y Publicar
-                </button>
+                <button type="button" onClick={() => setUploadModalEvent(null)} className="px-4 py-2 rounded-xl border text-xs font-bold text-slate-600">Cancelar</button>
+                <button type="submit" className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold">Guardar Crono</button>
               </div>
             </form>
           </div>
